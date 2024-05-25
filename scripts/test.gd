@@ -16,12 +16,12 @@ func _ready():
 
 
 func start():
-
 	var script:= VirtualScript.new()
 	
 	#test1(script)
 	#test2(script)
-	script.parse_file("res://virtual scripts/script.txt")
+	#script.parse_file("res://virtual scripts/if_else.txt")
+	script.parse_file("res://virtual scripts/built_in_funcs.txt")
 	
 	script.run()
 	
@@ -31,12 +31,14 @@ func start():
 
 
 func test1(script: VirtualScript):
-	script.register_function("my_func", ["a", "b"], VirtualScript.Code.new(script).create_inline("return a + b"))
+	script.register_function("my_func", VirtualScript.Function.Type.CUSTOM, ["a", "b"], VirtualScript.Code.new(script).create_inline("return a + b"))
+	#script.register_function("my_func", VirtualScript.Function.Type.CUSTOM, ["a"], VirtualScript.Code.new(script).create_inline("return a"))
 	
 	script.add_line("var x: int")
 	script.add_line("x = 1")
 
 	script.add_line("if my_func(x, 1) == 2:")
+	#script.add_line("if my_func(x) == 2:")
 	script.add_line("x= 2")
 
 
