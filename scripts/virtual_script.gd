@@ -143,25 +143,12 @@ class CodeLine:
 			if func_name in expression:
 				# TODO build priority list by checking how many '(' - ')' are preceeding the function call
 				# and resolve code from highest priority
-				 
-				assert((func_name + "(") in expression)
-				var regex= RegEx.new()
-				regex.compile(func_name + "\\(([^,]+),\\s*([^)]+)\\)")
-				var regex_result: RegExMatch = regex.search(expression)
-				assert(regex_result)
-
-				var arg_str= regex_result.get_string().substr(len(func_name) + 1).rstrip(")")
-				prints(func_name, "arguments", arg_str)
-				var func_ref: Function= script.functions[func_name]
-				var arg_values: Array
-
-				for arg in arg_str.split(","):
-					var result: EvaluationResult= script.solve_expression(arg, local_code)
-					if result.has_error:
-						return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-					arg_values.append(result.result_value)
+				
+				var regex:= RegEx.new()
+				var arg_values: Array= parse_function_arguments(func_name, expression, script, local_code, regex)
 
 				prints(func_name, "argument values", arg_values)
+				var func_ref: Function= script.functions[func_name]
 				func_ref.code.run(func_ref.arguments, arg_values)
 				expression= regex.sub(expression, str(func_ref.code.return_value))
 				prints("Expression after replacing", expression)
@@ -203,6 +190,26 @@ class CodeLine:
 			assert(false, "Can't parse line:  " + text)
 
 		return ParseResult.new()
+
+
+	func parse_function_arguments(func_name: String, expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
+		assert((func_name + "(") in expression)
+		#var regex= RegEx.new()
+		regex.compile(func_name + "\\(([^,]+),\\s*([^)]+)\\)")
+		var regex_result: RegExMatch = regex.search(expression)
+		assert(regex_result)
+
+		var arg_str= regex_result.get_string().substr(len(func_name) + 1).rstrip(")")
+		prints(func_name, "arguments", arg_str)
+		var arg_values: Array
+
+		for arg in arg_str.split(","):
+			var result: EvaluationResult= script.solve_expression(arg, local_code)
+			if result.has_error:
+				return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
+			arg_values.append(result.result_value)		
+
+		return arg_values
 
 
 	func get_desc()-> String:
@@ -335,12 +342,14 @@ func parse_file(file_path: String):
 	for line in FileAccess.get_file_as_string(file_path).split("\n"):
 		line= line.strip_edges(false, true)
 		var line_indents:= line.count("\t")
+		
 		if indents != line_indents:
 			while indents > line_indents:
 				close_block()
 				indents-= 1
 				
 			indents= line_indents
+		
 		add_line(line)
 
 
