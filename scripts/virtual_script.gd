@@ -10,15 +10,40 @@ class Variable:
 		type= _type 
 
 
+
 class Function:
+	enum Type { BUILT_IN, CUSTOM }
+	
 	var name: String
+	var type: Type
 	var arguments: Array[String]
 	var code: Code
+	var callable: Callable
 
-	func _init(_name: String, _arguments: Array[String], _code: Code):
+
+	func _init(_name: String, _type: Type= Type.BUILT_IN, _arguments: Array[String]= [], _code: Code= null):
 		name= _name
+		type= _type
 		arguments= _arguments
 		code= _code
+
+	
+	func set_callable(_callable: Callable):
+		callable= _callable
+		return self
+
+
+	func run(arg_values: Array):
+		match type:
+			Type.BUILT_IN:
+				callable.callv(arg_values)
+			Type.CUSTOM:
+				code.run(arguments, arg_values)
+
+	
+	func get_return_value():
+		if code:
+			return code.return_value
 
 
 class Code:
@@ -61,8 +86,10 @@ class Code:
 		root.add_line(text)
 		return self
 
+
+
 class CodeLine:
-	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM }
+	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM, FUNCTION }
 	enum FlowControls { IF, ELSE, ELIF, FOR, WHILE }
 	
 	var type: Type
@@ -135,11 +162,14 @@ class CodeLine:
 			Type.PASS:
 				pass
 		
+			#Type.FUNCTION:
+				#script.solve_expression(expression, local_code)
+		
 		return CodeExecutionResult.new()
 
 
 	func pre_parse_expression(script: VirtualScript, local_code: Code):
-		for func_name in script.functions.keys():
+		for func_name in script.all_functions.keys():
 			if func_name in expression:
 				# TODO build priority list by checking how many '(' - ')' are preceeding the function call
 				# and resolve code from highest priority
@@ -148,9 +178,9 @@ class CodeLine:
 				var arg_values: Array= parse_function_arguments(func_name, expression, script, local_code, regex)
 
 				prints(func_name, "argument values", arg_values)
-				var func_ref: Function= script.functions[func_name]
-				func_ref.code.run(func_ref.arguments, arg_values)
-				expression= regex.sub(expression, str(func_ref.code.return_value))
+				var func_ref: Function= script.all_functions[func_name]
+				func_ref.run(arg_values)
+				expression= regex.sub(expression, str(func_ref.get_return_value()))
 				prints("Expression after replacing", expression)
 
 
@@ -187,6 +217,11 @@ class CodeLine:
 			parameter= parts[0].strip_edges()
 			expression= parts[1].strip_edges()
 		else:
+			for func_name in VirtualScriptHelper.built_in_functions:
+				if text.begins_with(func_name + "("):
+					type= Type.FUNCTION
+					expression= text
+					return ParseResult.new()
 			assert(false, "Can't parse line:  " + text)
 
 		return ParseResult.new()
@@ -195,19 +230,20 @@ class CodeLine:
 	func parse_function_arguments(func_name: String, expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
 		assert((func_name + "(") in expression)
 		#var regex= RegEx.new()
-		regex.compile(func_name + "\\(([^,]+),\\s*([^)]+)\\)")
+		#regex.compile(func_name + "\\(([^,]+),\\s*([^)]+)\\)")
+		regex.compile(func_name + "\\(([^,\\)]+)(?:,\\s*([^,\\)]+))*\\)")
 		var regex_result: RegExMatch = regex.search(expression)
 		assert(regex_result)
 
 		var arg_str= regex_result.get_string().substr(len(func_name) + 1).rstrip(")")
 		prints(func_name, "arguments", arg_str)
-		var arg_values: Array
+		var arg_values: Array= []
 
 		for arg in arg_str.split(","):
 			var result: EvaluationResult= script.solve_expression(arg, local_code)
 			if result.has_error:
 				return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-			arg_values.append(result.result_value)		
+			arg_values.append(result.result_value)
 
 		return arg_values
 
@@ -224,7 +260,8 @@ class CodeLine:
 				result+= " " + FlowControls.keys()[parameter]
 		result+= " " + expression
 		return result
-		
+
+
 
 class CodeBlock:
 	var lines: Array[CodeLine]
@@ -269,6 +306,7 @@ class ParseResult extends MyResult:
 
 var variables:= {}
 var functions:= {}
+var all_functions: Dictionary
 
 var code: Code= Code.new(self)
 
@@ -276,6 +314,10 @@ var code: Code= Code.new(self)
 
 func run():
 	print("RUN")
+	all_functions= {}
+	all_functions.merge(functions)
+	all_functions.merge(VirtualScriptHelper.built_in_functions)
+	
 	code.current_block= code.root
 	code.run()
 
@@ -330,8 +372,8 @@ func close_block():
 		code.store_nesting[code.nesting].fork_block= new_block
 
 
-func register_function(func_name: String, arguments: Array[String], func_code: Code):
-	functions[func_name]= Function.new(func_name, arguments, func_code)
+func register_function(func_name: String, type: Function.Type, arguments: Array[String], func_code: Code):
+	functions[func_name]= Function.new(func_name, type, arguments, func_code)
 
 
 func parse_file(file_path: String):
