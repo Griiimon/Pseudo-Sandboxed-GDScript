@@ -40,7 +40,7 @@ class Code:
 	
 
 	func run(variable_names: Array[String]= [], variable_values: Array= []):
-		assert(len(variable_names) == len(variable_values), "Variables/Values count doesn't match)
+		assert(len(variable_names) == len(variable_values), str("Variables/Values count doesn't match ", len(variable_names), " vs ", len(variable_values)))
 		
 		for i in len(variable_names):
 			var var_name: String= variable_names[i]
