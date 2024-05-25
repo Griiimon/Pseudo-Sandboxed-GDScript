@@ -7,5 +7,5 @@
 - [ ] Recursive functions
 - [ ] Static variables
 - [ ] Attach VirtualScript to nodes
-- [ ] Access Scene Tree from VirtualScript
+- [ ] Access `SceneTree` from VirtualScript
 - [ ] Make VirtualScript and sub classes `Resource` so its current state can be saved easily
