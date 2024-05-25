@@ -291,6 +291,11 @@ func solve_expression(expression: String, local_code: Code)-> EvaluationResult:
 
 
 func add_line(text: String):
+	text= text.strip_edges()
+	
+	if not text: return
+	
+	
 	var new_block: CodeBlock= code.current_block.add_line(text)
 	
 	if new_block:
@@ -320,6 +325,23 @@ func close_block():
 
 func register_function(func_name: String, arguments: Array[String], func_code: Code):
 	functions[func_name]= Function.new(func_name, arguments, func_code)
+
+
+func parse_file(file_path: String):
+	assert(FileAccess.file_exists(file_path))
+	
+	var indents:= 0
+	
+	for line in FileAccess.get_file_as_string(file_path).split("\n"):
+		line= line.strip_edges(false, true)
+		var line_indents:= line.count("\t")
+		if indents != line_indents:
+			while indents > line_indents:
+				close_block()
+				indents-= 1
+				
+			indents= line_indents
+		add_line(line)
 
 
 func dump_variables():
