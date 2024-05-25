@@ -36,7 +36,8 @@ class Function:
 	func run(arg_values: Array):
 		match type:
 			Type.BUILT_IN:
-				callable.callv(arg_values)
+				assert(callable)
+				callable.call(arg_values)
 			Type.CUSTOM:
 				code.run(arguments, arg_values)
 
@@ -170,7 +171,7 @@ class CodeLine:
 
 	func pre_parse_expression(script: VirtualScript, local_code: Code):
 		for func_name in script.all_functions.keys():
-			if func_name in expression:
+			if func_name + "(" in expression:
 				# TODO build priority list by checking how many '(' - ')' are preceeding the function call
 				# and resolve code from highest priority
 				
