@@ -9,3 +9,4 @@
 - [ ] Attach VirtualScript to nodes
 - [ ] Access `SceneTree` from VirtualScript
 - [ ] Make VirtualScript and sub classes `Resource` so its current state can be saved easily
+- [ ] Loops
