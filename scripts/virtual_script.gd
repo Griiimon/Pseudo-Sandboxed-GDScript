@@ -40,7 +40,7 @@ class Code:
 	
 
 	func run(variable_names: Array[String]= [], variable_values: Array= []):
-		assert(len(variable_names) == len(variable_values))
+		assert(len(variable_names) == len(variable_values), "Variables/Values count doesn't match)
 		
 		for i in len(variable_names):
 			var var_name: String= variable_names[i]
@@ -200,7 +200,7 @@ class CodeLine:
 			parameter= parts[0].strip_edges()
 			expression= parts[1].strip_edges()
 		else:
-			assert(false)
+			assert(false, "Can't parse line:  " + text)
 
 		return ParseResult.new()
 
@@ -328,7 +328,7 @@ func register_function(func_name: String, arguments: Array[String], func_code: C
 
 
 func parse_file(file_path: String):
-	assert(FileAccess.file_exists(file_path))
+	assert(FileAccess.file_exists(file_path), file_path + " doesn't exist")
 	
 	var indents:= 0
 	
@@ -369,7 +369,8 @@ func dump_tree():
 
 
 static func get_type_from_string(type_desc: String)-> int:
-	match type_desc.to_lower():
+	type_desc= type_desc.to_lower()
+	match type_desc:
 		"int":
 			return TYPE_INT
 		"float":
@@ -379,5 +380,5 @@ static func get_type_from_string(type_desc: String)-> int:
 		"array":
 			return TYPE_ARRAY
 		_:
-			assert(false)
+			assert(false, "unhandled type " + type_desc)
 			return -1
