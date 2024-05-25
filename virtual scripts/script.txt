@@ -1,0 +1,10 @@
+var x: int
+x = 1
+
+if true:
+	if false:
+		x= 100
+	else:
+		x = -100
+else:
+	x = -1
