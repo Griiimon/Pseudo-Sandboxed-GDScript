@@ -188,7 +188,7 @@ class CodeLine:
 			var s: String= text.substr(7)
 			type= Type.RETURN
 			expression= s
-		elif text.begins_with("pass"):
+		elif text.begins_with("pass") or text.begins_with("#"):
 			type= Type.PASS
 		elif text.begins_with("else"):
 			type= Type.FLOW_CONTROL
