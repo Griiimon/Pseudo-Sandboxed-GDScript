@@ -8,4 +8,4 @@
 - [ ] Static variables
 - [ ] Attach VirtualScript to nodes
 - [ ] Access Scene Tree from VirtualScript
-- [ ] Make VirtualScript and sub classes 'Resource' so its current state can be saved easily
+- [ ] Make VirtualScript and sub classes `Resource` so its current state can be saved easily
