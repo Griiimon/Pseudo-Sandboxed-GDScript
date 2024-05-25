@@ -20,8 +20,8 @@ func start():
 	var script:= VirtualScript.new()
 	
 	#test1(script)
-	test2(script)
-	
+	#test2(script)
+	script.parse_file("res://virtual scripts/script.txt")
 	
 	script.run()
 	
