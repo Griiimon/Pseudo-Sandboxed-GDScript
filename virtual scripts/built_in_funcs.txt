@@ -1,4 +1,10 @@
+print(deg_to_rad(90 + 90))
 var x: int
 x= 4
 print("foo", "bar", 5, x)
-prints("foo", "bar", 5, x)
+prints("foo", "bar", 5, x, deg_to_rad(90))
+push_warning("WATCH OUT")
+print(randi())
+randomize()
+print(randi())
+assert(false, "im asserting")
