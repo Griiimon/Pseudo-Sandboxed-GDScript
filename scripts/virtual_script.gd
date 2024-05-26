@@ -228,15 +228,31 @@ class CodeLine:
 
 	func parse_function_arguments(func_name: String, expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
 		assert((func_name + "(") in expression)
-		regex.compile(func_name + "\\(([^,\\)]+)(?:,\\s*([^,\\)]+))*\\)")
-		var regex_result: RegExMatch = regex.search(expression)
-		assert(regex_result)
+		
+		var arg_str: String= expression.trim_prefix(func_name + "(").trim_suffix(")")
+		prints("Trimmed arg_str", arg_str)
+		var args: Array[String]= []
+		var i:= 0
+		var start: int
+		var stack:= 0
+		while i < len(arg_str):
+			if arg_str[i] == "," and stack == 0:
+				args.append(arg_str.substr(start, i - start).strip_edges())
+				start= i + 1
+			elif arg_str[i] == "(":
+				stack+= 1
+			elif arg_str[i] == ")":
+				stack-= 1
+				assert(stack >= 0)
 
-		var arg_str= regex_result.get_string().substr(len(func_name) + 1).rstrip(")")
-		prints(func_name, "arguments", arg_str)
+			i+= 1
+		
+		args.append(arg_str.substr(start, i - start))
+
+		prints(func_name, "arguments", args)
 		var arg_values: Array= []
 
-		for arg in arg_str.split(","):
+		for arg in args:
 			var result: EvaluationResult= script.solve_expression(arg, local_code)
 			if result.has_error:
 				return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
@@ -244,7 +260,7 @@ class CodeLine:
 
 		return arg_values
 
-
+		
 	func get_desc()-> String:
 		var result:= ""
 		result+= Type.keys()[type]
