@@ -20,8 +20,9 @@ func start():
 	
 	#test1(script)
 	#test2(script)
-	#script.parse_file("res://virtual scripts/if_else.txt")
-	script.parse_file("res://virtual scripts/built_in_funcs.txt")
+	script.parse_file("res://virtual scripts/if_else.txt")
+	#script.parse_file("res://virtual scripts/built_in_funcs.txt")
+	#script.parse_file("res://virtual scripts/loops.txt")
 	
 	script.run()
 	
