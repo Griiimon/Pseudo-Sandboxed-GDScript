@@ -162,9 +162,7 @@ class CodeLine:
 		
 			Type.PASS:
 				pass
-		
-			#Type.FUNCTION:
-				#script.solve_expression(expression, local_code)
+
 		
 		return CodeExecutionResult.new()
 
@@ -230,8 +228,6 @@ class CodeLine:
 
 	func parse_function_arguments(func_name: String, expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
 		assert((func_name + "(") in expression)
-		#var regex= RegEx.new()
-		#regex.compile(func_name + "\\(([^,]+),\\s*([^)]+)\\)")
 		regex.compile(func_name + "\\(([^,\\)]+)(?:,\\s*([^,\\)]+))*\\)")
 		var regex_result: RegExMatch = regex.search(expression)
 		assert(regex_result)
