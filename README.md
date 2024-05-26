@@ -11,4 +11,5 @@
 - [ ] Make VirtualScript and sub classes `Resource` so its current state can be saved easily
 - [ ] Loops
 - [ ] Nested function calls
-- [ ] Max Instructions/Execution time hook
+- [ ] Max Instructions / Execution time hook
+- [ ] GDScript constants PI / TAU
