@@ -138,8 +138,7 @@ class CodeLine:
 							return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
 						var current_block: CodeBlock= script.code.current_block
 						var fork: bool= not result.result_value
-						prints("  fork:", fork)
-						return CodeExecutionResult.new(current_block.next_block if not fork else current_block.fork_block)
+						return CodeExecutionResult.new(current_block.fork_block if fork else current_block.next_block)
 
 					FlowControls.ELSE:
 
@@ -151,8 +150,12 @@ class CodeLine:
 						if result.has_error:
 							return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
 						var current_block: CodeBlock= script.code.current_block
-						current_block.next_block if result.result_value else current_block.fork_block
-						return CodeExecutionResult.new(current_block.next_block if result.result_value else current_block.fork_block)
+						var fork: bool= not result.result_value
+						if not fork:
+							current_block.line_offset_idx= current_block.current_line_idx
+							current_block.next_block.next_block= current_block
+						
+						return CodeExecutionResult.new(current_block.fork_block if fork else current_block.next_block)
 
 			Type.RETURN:
 				var result: EvaluationResult= script.solve_expression(expression, local_code)
@@ -217,6 +220,11 @@ class CodeLine:
 			type= Type.ASSIGN_VARIABLE
 			parameter= parts[0].strip_edges()
 			expression= parts[1].strip_edges()
+		elif text.begins_with("while "):
+			type= Type.FLOW_CONTROL
+			parameter= FlowControls.WHILE
+			expression= text.trim_prefix("while ").rstrip(":")
+			return ParseResult.new(true)
 		else:
 			for func_name in VirtualScriptHelper.built_in_functions:
 				if text.begins_with(func_name + "("):
@@ -285,15 +293,24 @@ class CodeBlock:
 	var next_block: CodeBlock
 	var fork_block: CodeBlock
 
+	var current_line_idx: int= 0
+	var line_offset_idx: int
 
 	func run(script: VirtualScript, local_code: Code= null):
+		current_line_idx= 0
+		
 		for line in lines:
-			var result: CodeExecutionResult= line.execute(script, local_code)
-			if result.jump_to_block:
-				# TODO jump should be a result of this func AFTER it finished
-				# so we don't pile on the call stack
-				script.code.jump_to_block(result.jump_to_block)
-				return
+			if current_line_idx >= line_offset_idx: 
+				line_offset_idx= 0
+				
+				var result: CodeExecutionResult= line.execute(script, local_code)
+				if result.jump_to_block:
+					# TODO jump should be a result of this func AFTER it finished
+					# so we don't pile on the call stack
+					script.code.jump_to_block(result.jump_to_block)
+					return
+					
+			current_line_idx+= 1
 
 
 	func add_line(text: String)-> CodeBlock:
@@ -366,8 +383,6 @@ func add_line(text: String):
 	
 	if new_block:
 		code.store_nesting[code.nesting]= code.current_block
-		#if code.previous_block:
-			#code.previous_block.next_block= new_block
 		code.previous_block= code.current_block
 		code.current_block= new_block
 
@@ -378,8 +393,6 @@ func add_line(text: String):
 func close_block():
 	var new_block:= CodeBlock.new()
 	
-	#if code.previous_block:
-		#code.previous_block.fork_block= new_block
 	code.previous_block= code.current_block
 	code.current_block= new_block
 
