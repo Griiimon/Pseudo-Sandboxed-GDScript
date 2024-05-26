@@ -179,7 +179,9 @@ class CodeLine:
 				prints(func_name, "argument values", arg_values)
 				var func_ref: Function= script.all_functions[func_name]
 				func_ref.run(arg_values)
-				expression= regex.sub(expression, str(func_ref.get_return_value()))
+				var return_val= func_ref.get_return_value()
+				if return_val:
+					expression= regex.sub(expression, str())
 				prints("Expression after replacing", expression)
 
 
@@ -254,9 +256,10 @@ class CodeLine:
 
 		for arg in args:
 			var result: EvaluationResult= script.solve_expression(arg, local_code)
-			if result.has_error:
-				return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-			arg_values.append(result.result_value)
+			if result.result_value != null:
+				if result.has_error:
+					return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
+				arg_values.append(result.result_value)
 
 		return arg_values
 
@@ -345,6 +348,7 @@ func create_variable(var_name: String, type: int):
 
 
 func solve_expression(expression: String, local_code: Code)-> EvaluationResult:
+	if expression.is_empty(): return EvaluationResult.new()
 	var all_variables:= variables.duplicate()
 	if local_code != code:
 		all_variables.merge(local_code.local_variables, true)
