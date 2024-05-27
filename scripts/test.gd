@@ -23,8 +23,12 @@ func start():
 	script.parse_file("res://virtual scripts/if_else.txt")
 	#script.parse_file("res://virtual scripts/built_in_funcs.txt")
 	#script.parse_file("res://virtual scripts/loops.txt")
+	print("---")
+	script.dump_node_tree(true)
+	print("---")
 	
 	script.run()
+	print("---")
 	
 	script.dump_variables()
 	
