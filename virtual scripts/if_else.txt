@@ -2,6 +2,9 @@ var x: int
 x = 1
 
 if true:
+	print("TRUE")
+
+if true:
 	if false:
 		x= 100
 	else:
