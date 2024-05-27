@@ -1,12 +1,13 @@
 class_name VirtualScriptHelper
 
 
+
 static var built_in_functions:= {
 	"print": VirtualScript.Function.new("print").set_callable(func(arr: Array): print("".join(arr.map(func(x): return str(x))))), 
 	"prints": VirtualScript.Function.new("prints").set_callable(func(arr: Array): print(" ".join(arr.map(func(x): return str(x))))),
 	"push_warning": VirtualScript.Function.new("push_warning").set_callable(func(arr: Array): push_warning("".join(arr.map(func(x): return str(x))))), 
 	"push_error": VirtualScript.Function.new("push_error").set_callable(func(arr: Array): push_error("".join(arr.map(func(x): return str(x))))), 
-	"randomize": VirtualScript.Function.new("randomize").set_callable(func(arr: Array): randomize()), 
+	"randomize": VirtualScript.Function.new("randomize").set_callable(func(_arr: Array): randomize()), 
 	"seed": VirtualScript.Function.new("seed").set_callable(func(arr: Array): seed(arr[0])),  
 	"assert": VirtualScript.Function.new("assert").set_callable(func(arr: Array): assert(arr[0], arr[1])) } 
 
