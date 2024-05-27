@@ -47,10 +47,220 @@ class Function:
 			return code.return_value
 
 
+class CodeNode:
+	var desc: String
+	
+	func _init(s: String):
+		desc= s
+		prints("Create", s, "node")
+		
+		
+	func add_line(text: String)-> CodeNode:
+		var line:= CodeLine.new()
+		var parse_result: ParseResult= line.parse(text)
+		var current_node: CodeNode= self
+		var new_node: CodeNode= current_node.on_add_line(line)
+		return new_node if new_node else current_node
+
+
+	func on_add_line(line: CodeLine)-> CodeNode:
+		return null
+
+
+	func close_block(next_line: CodeLine):
+		pass
+
+
+	func is_parsing_finished()-> bool:
+		return false
+	
+	
+	func can_finish_parsing()-> bool:
+		return false
+
+	
+	func dump_node_tree(indent: int, with_content: bool):
+		pass
+
+
+
+class BlockNode extends CodeNode:
+	var nodes: Array[CodeNode]
+	var parsing_finished: bool= false
+	var current_node: CodeNode
+	
+	
+	func _init():
+		super("Block")
+
+
+	func run(script: VirtualScript, local_code: Code= null):
+		for node in nodes:
+			var done: bool= false
+			while not done:
+				if node.execute(script, local_code).has_finished:
+					done= true
+
+
+	func on_add_line(line: CodeLine):
+		if line.type == CodeLine.Type.FLOW_CONTROL:
+			match line.parameter:
+				CodeLine.FlowControls.IF:
+					nodes.append(IfNode.new())
+				CodeLine.FlowControls.WHILE:
+					nodes.append(WhileNode.new())
+				
+		if nodes.is_empty() or nodes[-1].is_parsing_finished():
+			nodes.append(line)
+		else:
+			nodes[-1].on_add_line(line)
+
+
+	func close_block(next_line: CodeLine):
+		if nodes.is_empty() or not nodes[-1].can_finish_parsing():
+			parsing_finished= true
+		else:
+			nodes[-1].close_block(next_line)
+
+
+	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
+		if not current_node:
+			assert(not nodes.is_empty())
+			current_node= nodes[0]
+		else:
+			var idx: int= nodes.find(current_node)
+			current_node= nodes[idx + 1]
+			
+		current_node.execute(script, local_code)
+		if current_node == nodes.back():
+			return CodeExecutionResult.new().finish()
+		return CodeExecutionResult.new()
+		
+
+	func is_parsing_finished()-> bool:
+		return parsing_finished
+
+
+	func can_finish_parsing()-> bool:
+		return true
+
+
+	func dump_node_tree(indent: int, with_content: bool):
+		print(" ".repeat(indent), desc)
+		indent+= 1
+		for node in nodes:
+			var suffix:= "   "
+			if node is CodeLine:
+				suffix+= node.orig_text
+			elif node is IfNode:
+				suffix+= node.statement.orig_text
+				
+			print(" ".repeat(indent), node.desc, suffix)
+			node.dump_node_tree(indent, with_content)
+
+
+
+class IfNode extends CodeNode:
+	enum State { CONDITION, TRUE_BLOCK, FALSE_BLOCK }
+	var statement: CodeLine
+	var true_block: BlockNode
+	var false_block: BlockNode
+	var parsing_finished: bool= false
+	
+	var state= State.CONDITION
+
+
+	func _init():
+		super("If")
+
+
+	func on_add_line(line: CodeLine):
+		if not statement:
+			statement= line
+			true_block= BlockNode.new()
+		elif false_block:
+			false_block.on_add_line(line)
+		elif line.type == CodeLine.Type.FLOW_CONTROL and line.parameter == CodeLine.FlowControls.ELSE:
+			false_block= BlockNode.new()
+		else:
+			true_block.on_add_line(line)
+
+
+	func close_block(next_line: CodeLine):
+		if false_block:
+			false_block.close_block(next_line)
+			parsing_finished= true
+		elif true_block:
+			true_block.close_block(next_line)
+			if not next_line or next_line.type != CodeLine.Type.FLOW_CONTROL or next_line.parameter != CodeLine.FlowControls.ELSE:
+				parsing_finished= true
+
+
+	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
+		match state:
+			State.CONDITION:
+				var result: CodeExecutionResult= statement.execute(script, local_code)
+				if result.value:
+					state= State.TRUE_BLOCK
+				elif false_block:
+					state= State.FALSE_BLOCK
+				else :
+					result.has_finished= true
+					
+				return result
+			State.TRUE_BLOCK:
+				var result: CodeExecutionResult= true_block.execute(script, local_code)
+				if not result.has_error:
+					if result.has_finished:
+						if false_block:
+							state= State.FALSE_BLOCK
+							result.has_finished= false
+				return result
+			State.FALSE_BLOCK:
+				return false_block.execute(script, local_code)
+		
+		assert(false)
+		return CodeExecutionResult.new()
+
+
+	func is_parsing_finished()-> bool:
+		return parsing_finished
+
+
+	func can_finish_parsing()-> bool:
+		return true
+
+
+	func dump_node_tree(indent: int, with_content: bool):
+		print(" ".repeat(indent), desc)
+		indent+= 1
+		var nodes: Array[CodeNode]= [true_block]
+		if false_block:
+			nodes.append(false_block)
+			
+		for node in nodes:
+			print(" ".repeat(indent), node.desc)
+			node.dump_node_tree(indent, with_content)
+
+
+
+class LoopNode extends CodeNode:
+	var statement: CodeLine
+	var block: BlockNode
+
+
+
+class WhileNode extends LoopNode:
+
+	func _init():
+		super("While")
+
+
+
+
 class Code:
-	var root: CodeBlock
-	var current_block: CodeBlock
-	var previous_block: CodeBlock
+	var root: CodeNode
+#	var current_block: CodeNode
 	var parent_script: VirtualScript
 	var return_value: Variant
 	
@@ -60,8 +270,7 @@ class Code:
 	var store_nesting:= {}
 	
 	func _init(_script: VirtualScript):
-		root= CodeBlock.new()
-		current_block= root
+		root= BlockNode.new()
 		parent_script= _script
 	
 
@@ -75,21 +284,16 @@ class Code:
 			local_var.value= var_value
 			local_variables[var_name]= local_var 
 			
-		current_block.run(parent_script, self)
+		root.run(parent_script, self)
 
 
-	func jump_to_block(block: CodeBlock):
-		current_block= block
-		run()
-	
-	
 	func create_inline(text: String)-> Code:
 		root.add_line(text)
 		return self
 
 
 
-class CodeLine:
+class CodeLine extends CodeNode:
 	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM, FUNCTION }
 	enum FlowControls { IF, ELSE, ELIF, FOR, WHILE }
 	
@@ -99,6 +303,11 @@ class CodeLine:
 	var expression: String
 	
 	var orig_text: String
+
+
+	func _init(pre_parse: bool= false):
+		if not pre_parse:
+			super("CodeLine")
 	
 	
 	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
@@ -125,38 +334,24 @@ class CodeLine:
 				var result: EvaluationResult= script.solve_expression(expression, local_code)
 				if result.has_error:
 					return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-				script.assign_variable(parameter, result.result_value)
+				script.assign_variable(parameter, result.value)
 			
 			Type.FLOW_CONTROL:
 				
 				match parameter:
 
 					FlowControls.IF:
-
 						var result: EvaluationResult= script.solve_expression(expression, local_code)
 						if result.has_error:
 							return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-						var current_block: CodeBlock= script.code.current_block
-						var fork: bool= not result.result_value
-						return CodeExecutionResult.new(current_block.fork_block if fork else current_block.next_block)
-
-					FlowControls.ELSE:
-
-						return CodeExecutionResult.new(script.code.current_block.next_block)
-
+						return CodeExecutionResult.new(result.value)
+					
 					FlowControls.WHILE:
-						
 						var result: EvaluationResult= script.solve_expression(expression, local_code)
 						if result.has_error:
 							return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-						var current_block: CodeBlock= script.code.current_block
-						var fork: bool= not result.result_value
-						if not fork:
-							current_block.line_offset_idx= current_block.current_line_idx
-							current_block.next_block.next_block= current_block
-						
-						return CodeExecutionResult.new(current_block.fork_block if fork else current_block.next_block)
-
+						return CodeExecutionResult.new(result.value)
+			
 			Type.RETURN:
 				var result: EvaluationResult= script.solve_expression(expression, local_code)
 				if result.has_error:
@@ -167,7 +362,7 @@ class CodeLine:
 				pass
 
 		
-		return CodeExecutionResult.new()
+		return CodeExecutionResult.new().finish()
 
 
 	func pre_parse_expression(script: VirtualScript, local_code: Code):
@@ -204,7 +399,6 @@ class CodeLine:
 			type= Type.FLOW_CONTROL
 			parameter= FlowControls.IF
 			expression= text.trim_prefix("if ").rstrip(":")
-			return ParseResult.new(true)
 		elif text.begins_with("return "):
 			var s: String= text.substr(7)
 			type= Type.RETURN
@@ -214,7 +408,6 @@ class CodeLine:
 		elif text.begins_with("else"):
 			type= Type.FLOW_CONTROL
 			parameter= FlowControls.ELSE
-			return ParseResult.new(true)
 		elif "=" in text and not "==" in text:
 			var parts: PackedStringArray= text.split("=")
 			type= Type.ASSIGN_VARIABLE
@@ -224,7 +417,6 @@ class CodeLine:
 			type= Type.FLOW_CONTROL
 			parameter= FlowControls.WHILE
 			expression= text.trim_prefix("while ").rstrip(":")
-			return ParseResult.new(true)
 		else:
 			for func_name in VirtualScriptHelper.built_in_functions:
 				if text.begins_with(func_name + "("):
@@ -236,10 +428,10 @@ class CodeLine:
 		return ParseResult.new()
 
 
-	func parse_function_arguments(func_name: String, expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
-		assert((func_name + "(") in expression)
+	func parse_function_arguments(func_name: String, _expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
+		assert((func_name + "(") in _expression)
 		
-		var arg_str: String= expression.trim_prefix(func_name + "(").trim_suffix(")")
+		var arg_str: String= _expression.trim_prefix(func_name + "(").trim_suffix(")")
 		prints("Trimmed arg_str", arg_str)
 		var args: Array[String]= []
 		var i:= 0
@@ -264,12 +456,16 @@ class CodeLine:
 
 		for arg in args:
 			var result: EvaluationResult= script.solve_expression(arg, local_code)
-			if result.result_value != null:
+			if result.value != null:
 				if result.has_error:
 					return CodeExecutionResult.new().error("Evaluation error: " + result.error_text)
-				arg_values.append(result.result_value)
+				arg_values.append(result.value)
 
 		return arg_values
+
+
+	func is_finished()-> bool:
+		return true
 
 		
 	func get_desc()-> String:
@@ -287,54 +483,26 @@ class CodeLine:
 
 
 
-class CodeBlock:
-	var lines: Array[CodeLine]
-	
-	var next_block: CodeBlock
-	var fork_block: CodeBlock
-
-	var current_line_idx: int= 0
-	var line_offset_idx: int
-
-	func run(script: VirtualScript, local_code: Code= null):
-		current_line_idx= 0
-		
-		for line in lines:
-			if current_line_idx >= line_offset_idx: 
-				line_offset_idx= 0
-				
-				var result: CodeExecutionResult= line.execute(script, local_code)
-				if result.jump_to_block:
-					# TODO jump should be a result of this func AFTER it finished
-					# so we don't pile on the call stack
-					script.code.jump_to_block(result.jump_to_block)
-					return
-					
-			current_line_idx+= 1
-
-
-	func add_line(text: String)-> CodeBlock:
-		var line:= CodeLine.new()
-		var parse_result: ParseResult= line.parse(text)
-		lines.append(line)
-		if parse_result.create_block:
-			assert(not next_block)
-			next_block= CodeBlock.new()
-		return next_block
-
-
 class CodeExecutionResult extends MyResult:
-	var jump_to_block: CodeBlock
-	
-	func _init(jump: CodeBlock= null):
-		jump_to_block= jump
+	var value: Variant
+	var has_finished: bool= false
+
+	func _init(_value= null):
+		value= _value
+		
+
+	func finish():
+		has_finished= true
+		return self
+
 
 
 class ParseResult extends MyResult:
-	var create_block: bool
-	
-	func _init(_create_block: bool= false):
-		create_block= _create_block
+	pass
+	#var new_node: CodeNode
+	#
+	#func _init(_new_node: CodeNode= null):
+		#new_node= _new_node
 
 
 var variables:= {}
@@ -342,6 +510,8 @@ var functions:= {}
 var all_functions: Dictionary
 
 var code: Code= Code.new(self)
+
+var close_block_queue: int= 0
 
 
 
@@ -351,7 +521,6 @@ func run():
 	all_functions.merge(functions)
 	all_functions.merge(VirtualScriptHelper.built_in_functions)
 	
-	code.current_block= code.root
 	code.run()
 
 
@@ -378,29 +547,22 @@ func add_line(text: String):
 	
 	if not text: return
 	
-	
-	var new_block: CodeBlock= code.current_block.add_line(text)
-	
-	if new_block:
-		code.store_nesting[code.nesting]= code.current_block
-		code.previous_block= code.current_block
-		code.current_block= new_block
-
-		print(" ".repeat(code.nesting) + "->")
-		code.nesting+= 1
+	while close_block_queue > 0:
+		close_block_queue-= 1
+		var closing_line: CodeLine
+		if close_block_queue == 0:
+			closing_line= CodeLine.new(true)
+			closing_line.parse(text)
+		code.root.close_block(closing_line)
+		
+		
+	code.root.add_line(text)
 
 
 func close_block():
-	var new_block:= CodeBlock.new()
+	print("Close block")
+	close_block_queue+= 1
 	
-	code.previous_block= code.current_block
-	code.current_block= new_block
-
-	print(" ".repeat(code.nesting) + "<-")
-	code.nesting-= 1
-	if code.nesting >= 0:
-		code.store_nesting[code.nesting].fork_block= new_block
-
 
 func register_function(func_name: String, type: Function.Type, arguments: Array[String], func_code: Code):
 	functions[func_name]= Function.new(func_name, type, arguments, func_code)
@@ -430,23 +592,8 @@ func dump_variables():
 		print(var_name + ": " + str(variables[var_name].value))
 
 
-func dump_tree():
-	print(" ------- TREE -------- ")
-	var current_block: CodeBlock= code.root
-	
-	while current_block:
-		for line in current_block.lines:
-			print(line.get_desc())
-		var s:= ""
-		if current_block.next_block:
-			s+= " --> " + current_block.next_block.lines[0].get_desc()
-		if current_block.fork_block:
-			s+= " |-> " + current_block.fork_block.lines[0].get_desc()
-		print(s)
-		current_block= current_block.next_block
-		
-
-	print(" --------------------- ")
+func dump_node_tree(with_content: bool= false):
+	code.root.dump_node_tree(0, with_content)
 
 
 static func get_type_from_string(type_desc: String)-> int:
