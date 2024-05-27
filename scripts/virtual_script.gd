@@ -58,6 +58,8 @@ class CodeNode:
 	func add_line(text: String)-> CodeNode:
 		var line:= CodeLine.new()
 		var parse_result: ParseResult= line.parse(text)
+		if parse_result.ignore_line:
+			return self
 		var current_node: CodeNode= self
 		var new_node: CodeNode= current_node.on_add_line(line)
 		return new_node if new_node else current_node
@@ -79,8 +81,8 @@ class CodeNode:
 		return false
 
 	
-	func dump_node_tree(indent: int, with_content: bool):
-		pass
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		print(" ".repeat(indent), desc, suffix)
 
 
 
@@ -103,15 +105,22 @@ class BlockNode extends CodeNode:
 
 
 	func on_add_line(line: CodeLine):
-		if line.type == CodeLine.Type.FLOW_CONTROL:
-			match line.parameter:
-				CodeLine.FlowControls.IF:
-					nodes.append(IfNode.new())
-				CodeLine.FlowControls.WHILE:
-					nodes.append(WhileNode.new())
 				
 		if nodes.is_empty() or nodes[-1].is_parsing_finished():
-			nodes.append(line)
+			var new_node: bool= false
+			if line.type == CodeLine.Type.FLOW_CONTROL:
+				match line.parameter:
+					CodeLine.FlowControls.IF:
+						nodes.append(IfNode.new())
+						new_node= true
+					CodeLine.FlowControls.WHILE:
+						nodes.append(WhileNode.new())
+						new_node= true
+						
+			if new_node:
+				nodes[-1].on_add_line(line)
+			else:
+				nodes.append(line)
 		else:
 			nodes[-1].on_add_line(line)
 
@@ -120,20 +129,26 @@ class BlockNode extends CodeNode:
 		if nodes.is_empty() or not nodes[-1].can_finish_parsing():
 			parsing_finished= true
 		else:
-			nodes[-1].close_block(next_line)
+			if nodes[-1].is_parsing_finished():
+				parsing_finished= true
+			else:
+				nodes[-1].close_block(next_line)
 
 
 	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
 		if not current_node:
 			assert(not nodes.is_empty())
 			current_node= nodes[0]
-		else:
+		#else:
+			#var idx: int= nodes.find(current_node)
+			#current_node= nodes[idx + 1]
+			
+		var result: CodeExecutionResult= current_node.execute(script, local_code)
+		if current_node == nodes.back() and result.has_finished:
+			return CodeExecutionResult.new().finish()
+		if result.has_finished:
 			var idx: int= nodes.find(current_node)
 			current_node= nodes[idx + 1]
-			
-		current_node.execute(script, local_code)
-		if current_node == nodes.back():
-			return CodeExecutionResult.new().finish()
 		return CodeExecutionResult.new()
 		
 
@@ -145,17 +160,10 @@ class BlockNode extends CodeNode:
 		return true
 
 
-	func dump_node_tree(indent: int, with_content: bool):
-		print(" ".repeat(indent), desc)
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		super(indent, with_content, suffix)
 		indent+= 1
 		for node in nodes:
-			var suffix:= "   "
-			if node is CodeLine:
-				suffix+= node.orig_text
-			elif node is IfNode:
-				suffix+= node.statement.orig_text
-				
-			print(" ".repeat(indent), node.desc, suffix)
 			node.dump_node_tree(indent, with_content)
 
 
@@ -180,20 +188,22 @@ class IfNode extends CodeNode:
 			true_block= BlockNode.new()
 		elif false_block:
 			false_block.on_add_line(line)
+		elif not true_block.is_parsing_finished():
+			true_block.on_add_line(line)
 		elif line.type == CodeLine.Type.FLOW_CONTROL and line.parameter == CodeLine.FlowControls.ELSE:
 			false_block= BlockNode.new()
 		else:
-			true_block.on_add_line(line)
-
+			assert(false)
 
 	func close_block(next_line: CodeLine):
 		if false_block:
 			false_block.close_block(next_line)
-			parsing_finished= true
+			parsing_finished= false_block.is_parsing_finished()
 		elif true_block:
 			true_block.close_block(next_line)
-			if not next_line or next_line.type != CodeLine.Type.FLOW_CONTROL or next_line.parameter != CodeLine.FlowControls.ELSE:
-				parsing_finished= true
+			if true_block.is_parsing_finished():
+				if not next_line or next_line.type != CodeLine.Type.FLOW_CONTROL or next_line.parameter != CodeLine.FlowControls.ELSE:
+					parsing_finished= true
 
 
 	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
@@ -210,11 +220,11 @@ class IfNode extends CodeNode:
 				return result
 			State.TRUE_BLOCK:
 				var result: CodeExecutionResult= true_block.execute(script, local_code)
-				if not result.has_error:
-					if result.has_finished:
-						if false_block:
-							state= State.FALSE_BLOCK
-							result.has_finished= false
+				#if not result.has_error:
+					#if result.has_finished:
+						#if false_block:
+							#state= State.FALSE_BLOCK
+							#result.has_finished= false
 				return result
 			State.FALSE_BLOCK:
 				return false_block.execute(script, local_code)
@@ -231,16 +241,12 @@ class IfNode extends CodeNode:
 		return true
 
 
-	func dump_node_tree(indent: int, with_content: bool):
-		print(" ".repeat(indent), desc)
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		super(indent, with_content, ( "   " + statement.orig_text) if with_content else "")
 		indent+= 1
-		var nodes: Array[CodeNode]= [true_block]
+		true_block.dump_node_tree(indent, with_content, " [True]")
 		if false_block:
-			nodes.append(false_block)
-			
-		for node in nodes:
-			print(" ".repeat(indent), node.desc)
-			node.dump_node_tree(indent, with_content)
+			false_block.dump_node_tree(indent, with_content, " [False]")
 
 
 
@@ -387,7 +393,10 @@ class CodeLine extends CodeNode:
 		prints("Parsing line", text)
 		orig_text= text
 		
-		if text.begins_with("var "):
+		if text.begins_with("#"):
+			type= Type.PASS
+			return ParseResult.new().ignore()
+		elif text.begins_with("var "):
 			var s: String= text.substr(4)
 			if not ":" in s:
 				return MyResult.new().error("Parse error: variable definition missing : type")
@@ -403,7 +412,7 @@ class CodeLine extends CodeNode:
 			var s: String= text.substr(7)
 			type= Type.RETURN
 			expression= s
-		elif text.begins_with("pass") or text.begins_with("#"):
+		elif text.begins_with("pass"):
 			type= Type.PASS
 		elif text.begins_with("else"):
 			type= Type.FLOW_CONTROL
@@ -464,7 +473,7 @@ class CodeLine extends CodeNode:
 		return arg_values
 
 
-	func is_finished()-> bool:
+	func is_parsing_finished()-> bool:
 		return true
 
 		
@@ -482,6 +491,9 @@ class CodeLine extends CodeNode:
 		return result
 
 
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		super(indent, with_content, ("   " + orig_text ) if with_content else "")
+
 
 class CodeExecutionResult extends MyResult:
 	var value: Variant
@@ -498,11 +510,11 @@ class CodeExecutionResult extends MyResult:
 
 
 class ParseResult extends MyResult:
-	pass
-	#var new_node: CodeNode
-	#
-	#func _init(_new_node: CodeNode= null):
-		#new_node= _new_node
+	var ignore_line: bool= false
+	
+	func ignore():
+		ignore_line= true
+		return self
 
 
 var variables:= {}
