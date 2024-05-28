@@ -345,6 +345,10 @@ class Code:
 		return self
 
 
+	func call_function(func_name: String, args: Array)-> Variant:
+		return parent_script.all_functions[func_name].run(args)
+
+
 
 class CodeLine extends CodeNode:
 	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM, FUNCTION }
@@ -653,7 +657,7 @@ func parse_file(file_path: String):
 
 
 func process_callback(delta: float):
-	pass
+	code.call_function("_process", [delta])
 
 
 func physics_process_callback(delta: float):
