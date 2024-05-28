@@ -12,4 +12,6 @@
 - [ ] Loops
 - [ ] Nested function calls
 - [ ] Max Instructions / Execution time hook
-- [ ] GDScript constants PI / TAU
+- [ ] GDScript constants PI, TAU.. ?
+- [ ] Declare and assign Variable inline
+- [ ] Break keyword
