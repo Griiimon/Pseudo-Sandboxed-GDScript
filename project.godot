@@ -15,6 +15,10 @@ run/main_scene="res://test.tscn"
 config/features=PackedStringArray("4.2", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+VirtualScriptManager="*res://scripts/singleton/virtual_script_manager.gd"
+
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
