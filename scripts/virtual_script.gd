@@ -586,7 +586,11 @@ func run():
 
 
 func assign_variable(var_name: String, value: Variant):
-	variables[var_name].value= value
+	if not var_name in variables:
+		assert(attached_to_node and attached_to_node.get(var_name) != null)
+		attached_to_node.set(var_name, value)
+	else:
+		variables[var_name].value= value
 
 
 func create_variable(var_name: String, type: int):
@@ -600,7 +604,7 @@ func solve_expression(expression: String, local_code: Code)-> EvaluationResult:
 	if local_code != code:
 		all_variables.merge(local_code.local_variables, true)
 	
-	return Evaluator.evaluate(expression, all_variables.keys(), all_variables.values().map(func(v): return v.value))
+	return Evaluator.evaluate(expression, all_variables.keys(), all_variables.values().map(func(v): return v.value), attached_to_node)
 
 
 func add_line(text: String):
