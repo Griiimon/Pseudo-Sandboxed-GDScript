@@ -1,0 +1,4 @@
+func my_func(x):
+	return x + 1
+
+print(my_func(1))
