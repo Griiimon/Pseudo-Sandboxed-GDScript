@@ -423,21 +423,22 @@ class CodeLine extends CodeNode:
 
 
 	func pre_parse_expression(script: VirtualScript, local_code: Code):
-		for func_name in script.all_functions.keys():
-			if func_name + "(" in expression:
-				# TODO build priority list by checking how many '(' - ')' are preceeding the function call
-				# and resolve code from highest priority
-				
-				var regex:= RegEx.new()
-				var arg_values: Array= parse_function_arguments(func_name, expression, script, local_code, regex)
+		if not "func " in expression:
+			for func_name in script.all_functions.keys():
+				if func_name + "(" in expression:
+					# TODO build priority list by checking how many '(' - ')' are preceeding the function call
+					# and resolve code from highest priority
+					
+					var regex:= RegEx.new()
+					var arg_values: Array= parse_function_arguments(func_name, expression, script, local_code, regex)
 
-				prints(func_name, "argument values", arg_values)
-				var func_ref: Function= script.all_functions[func_name]
-				func_ref.run(arg_values)
-				var return_val= func_ref.get_return_value()
-				if return_val:
-					expression= regex.sub(expression, str())
-				prints("Expression after replacing", expression)
+					prints(func_name, "argument values", arg_values)
+					var func_ref: Function= script.all_functions[func_name]
+					func_ref.run(arg_values)
+					var return_val= func_ref.get_return_value()
+					if return_val:
+						expression= regex.sub(expression, str())
+					prints("Expression after replacing", expression)
 
 
 	func parse(text: String)-> ParseResult:
@@ -591,7 +592,7 @@ func run():
 
 func assign_variable(var_name: String, value: Variant):
 	if not var_name in variables:
-		assert(attached_to_node and attached_to_node.get(var_name) != null)
+		assert(attached_to_node and var_name in attached_to_node)
 		attached_to_node.set(var_name, value)
 	else:
 		variables[var_name].value= value
