@@ -251,8 +251,31 @@ class IfNode extends CodeNode:
 
 
 class LoopNode extends CodeNode:
+	enum State { CONDITION, BLOCK }
+	
+	var state= State.CONDITION
 	var statement: CodeLine
 	var block: BlockNode
+
+
+	func on_add_line(line: CodeLine):
+		if not statement:
+			statement= line
+			block= BlockNode.new()
+		else:
+			block.on_add_line(line)
+
+
+	func close_block(next_line: CodeLine):
+		block.close_block(next_line)
+
+
+	func is_parsing_finished()-> bool:
+		return block.is_parsing_finished()
+
+
+	func can_finish_parsing()-> bool:
+		return true
 
 
 
@@ -261,6 +284,30 @@ class WhileNode extends LoopNode:
 	func _init():
 		super("While")
 
+
+	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
+		match state:
+			State.CONDITION:
+				var result: CodeExecutionResult= statement.execute(script, local_code)
+				if result.value:
+					state= State.BLOCK
+				else :
+					result.has_finished= true
+					
+				return result
+			State.BLOCK:
+				var result: CodeExecutionResult= block.execute(script, local_code)
+				if result.has_finished:
+					state= State.CONDITION
+				result.has_finished= false
+				return result
+		
+		assert(false)
+		return CodeExecutionResult.new()
+
+
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		super(indent, with_content, ( "   " + statement.orig_text) if with_content else "")
 
 
 
