@@ -572,6 +572,8 @@ var code: Code= Code.new(self)
 
 var close_block_queue: int= 0
 
+var attached_to_node: Node
+
 
 
 func run():
@@ -644,6 +646,22 @@ func parse_file(file_path: String):
 			indents= line_indents
 		
 		add_line(line)
+
+
+func process_callback(delta: float):
+	pass
+
+
+func physics_process_callback(delta: float):
+	pass
+
+
+func tree_exiting_signal():
+	pass
+	
+
+func tree_exited_signal():
+	pass
 
 
 func dump_variables():
