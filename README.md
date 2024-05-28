@@ -6,7 +6,7 @@
 - [ ] Fix leaked objects
 - [ ] Recursive functions
 - [ ] Static variables
-- [ ] Attach VirtualScript to nodes
+- [x] Attach VirtualScript to nodes
 - [ ] Access `SceneTree` from VirtualScript
 - [ ] Make VirtualScript and sub classes `Resource` so its current state can be saved easily
 - [ ] Loops
@@ -15,3 +15,4 @@
 - [ ] GDScript constants PI, TAU.. ?
 - [ ] Declare and assign Variable inline
 - [ ] Break keyword
+- [ ] Parse script functions
