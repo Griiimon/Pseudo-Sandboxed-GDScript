@@ -11,40 +11,40 @@ class Variable:
 
 
 
-class Function:
-	enum Type { BUILT_IN, CUSTOM }
-	
-	var name: String
-	var type: Type
-	var arguments: Array[String]
-	var code: Code
-	var callable: Callable
-
-
-	func _init(_name: String, _type: Type= Type.BUILT_IN, _arguments: Array[String]= [], _code: Code= null):
-		name= _name
-		type= _type
-		arguments= _arguments
-		code= _code
-
-	
-	func set_callable(_callable: Callable):
-		callable= _callable
-		return self
-
-
-	func run(arg_values: Array):
-		match type:
-			Type.BUILT_IN:
-				assert(callable)
-				callable.call(arg_values)
-			Type.CUSTOM:
-				code.run(arguments, arg_values)
-
-	
-	func get_return_value():
-		if code:
-			return code.return_value
+#class Function:
+	#enum Type { BUILT_IN, CUSTOM }
+	#
+	#var name: String
+	#var type: Type
+	#var arguments: Array[String]
+	#var code: Code
+	#var callable: Callable
+#
+#
+	#func _init(_name: String, _type: Type= Type.BUILT_IN, _arguments: Array[String]= [], _code: Code= null):
+		#name= _name
+		#type= _type
+		#arguments= _arguments
+		#code= _code
+#
+	#
+	#func set_callable(_callable: Callable):
+		#callable= _callable
+		#return self
+#
+#
+	#func run(arg_values: Array):
+		#match type:
+			#Type.BUILT_IN:
+				#assert(callable)
+				#callable.call(arg_values)
+			#Type.CUSTOM:
+				#code.run(arguments, arg_values)
+#
+	#
+	#func get_return_value():
+		#if code:
+			#return code.return_value
 
 
 class CodeNode:
@@ -55,9 +55,9 @@ class CodeNode:
 		prints("Create", s, "node")
 		
 		
-	func add_line(text: String)-> CodeNode:
+	func add_line(text: String, script: VirtualScript)-> CodeNode:
 		var line:= CodeLine.new()
-		var parse_result: ParseResult= line.parse(text)
+		var parse_result: ParseResult= line.parse(text, script)
 		if parse_result.ignore_line:
 			return self
 		var current_node: CodeNode= self
@@ -116,7 +116,12 @@ class BlockNode extends CodeNode:
 					CodeLine.FlowControls.WHILE:
 						nodes.append(WhileNode.new())
 						new_node= true
-						
+			elif line.type == CodeLine.Type.FUNCTION_DECLARATION:
+				var func_node:= FunctionNode.new()
+				nodes.append(func_node)
+				func_node.defintion= line.parameter2
+				new_node= true
+		 
 			if new_node:
 				nodes[-1].on_add_line(line)
 			else:
@@ -311,6 +316,64 @@ class WhileNode extends LoopNode:
 
 
 
+class FunctionNode extends CodeNode:
+	enum State { DECLARATION, BLOCK }
+	
+	var defintion: FunctionDefinition
+	var state= State.DECLARATION
+	var declaration: CodeLine
+	var block: BlockNode
+	var arg_values: Array
+
+
+	func _init():
+		super("Function")
+
+
+	func execute(script: VirtualScript, local_code: Code)-> CodeExecutionResult:
+		match defintion.type:
+			FunctionDefinition.Type.BUILT_IN:
+				assert(defintion.callable)
+				var result= defintion.callable.call(arg_values)
+				return CodeExecutionResult.new().returns(result)
+			FunctionDefinition.Type.CUSTOM:
+				match state:
+					State.DECLARATION:
+						return CodeExecutionResult.new()
+					State.BLOCK:
+						var result: CodeExecutionResult= block.execute(script, local_code)
+						return result
+				
+		assert(false)
+		return CodeExecutionResult.new()
+
+
+	func on_add_line(line: CodeLine):
+		if not declaration:
+			declaration= line
+			block= BlockNode.new()
+			defintion.code= block
+		else:
+			block.on_add_line(line)
+
+
+	func close_block(next_line: CodeLine):
+		block.close_block(next_line)
+
+
+	func is_parsing_finished()-> bool:
+		return block.is_parsing_finished()
+
+
+	func can_finish_parsing()-> bool:
+		return true
+
+
+	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
+		super(indent, with_content, ( "   " + declaration.orig_text) if with_content else "")
+
+
+
 class Code:
 	var root: CodeNode
 #	var current_block: CodeNode
@@ -340,8 +403,8 @@ class Code:
 		root.run(parent_script, self)
 
 
-	func create_inline(text: String)-> Code:
-		root.add_line(text)
+	func create_inline(text: String, script: VirtualScript)-> Code:
+		root.add_line(text, script)
 		return self
 
 
@@ -351,7 +414,7 @@ class Code:
 
 
 class CodeLine extends CodeNode:
-	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM, FUNCTION }
+	enum Type { CREATE_VARIABLE, ASSIGN_VARIABLE, FLOW_CONTROL, RETURN, PASS, CUSTOM, FUNCTION_DECLARATION, FUNCTION_CALL }
 	enum FlowControls { IF, ELSE, ELIF, FOR, WHILE }
 	
 	var type: Type
@@ -433,7 +496,7 @@ class CodeLine extends CodeNode:
 					var arg_values: Array= parse_function_arguments(func_name, expression, script, local_code, regex)
 
 					prints(func_name, "argument values", arg_values)
-					var func_ref: Function= script.all_functions[func_name]
+					var func_ref: FunctionDefinition= script.all_functions[func_name]
 					func_ref.run(arg_values)
 					var return_val= func_ref.get_return_value()
 					if return_val:
@@ -441,7 +504,7 @@ class CodeLine extends CodeNode:
 					prints("Expression after replacing", expression)
 
 
-	func parse(text: String)-> ParseResult:
+	func parse(text: String, script: VirtualScript)-> ParseResult:
 		prints("Parsing line", text)
 		orig_text= text
 		
@@ -478,10 +541,17 @@ class CodeLine extends CodeNode:
 			type= Type.FLOW_CONTROL
 			parameter= FlowControls.WHILE
 			expression= text.trim_prefix("while ").rstrip(":")
+		# TODO should be pre-parsed
+		elif text.begins_with("func "):
+			type= Type.FUNCTION_DECLARATION
+			expression= text
+			parameter= expression.left(expression.find("(")).trim_prefix("func ")
+			var args: Array= CodeLine.get_arguments_array(parameter, expression)
+			parameter2= script.register_function(parameter, FunctionDefinition.Type.CUSTOM, args, null)
 		else:
-			for func_name in VirtualScriptHelper.built_in_functions:
+			for func_name in script.all_functions:
 				if text.begins_with(func_name + "("):
-					type= Type.FUNCTION
+					type= Type.FUNCTION_CALL
 					expression= text
 					return ParseResult.new()
 			assert(false, "Can't parse line:  " + text)
@@ -489,9 +559,7 @@ class CodeLine extends CodeNode:
 		return ParseResult.new()
 
 
-	func parse_function_arguments(func_name: String, _expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
-		assert((func_name + "(") in _expression)
-		
+	static func get_arguments_array(func_name: String, _expression: String)-> Array[String]:
 		var arg_str: String= _expression.trim_prefix(func_name + "(").trim_suffix(")")
 		prints("Trimmed arg_str", arg_str)
 		var args: Array[String]= []
@@ -513,6 +581,14 @@ class CodeLine extends CodeNode:
 		args.append(arg_str.substr(start, i - start))
 
 		prints(func_name, "arguments", args)
+		return args
+
+
+	static func parse_function_arguments(func_name: String, _expression: String, script: VirtualScript, local_code: Code, regex: RegEx)-> Array:
+		assert((func_name + "(") in _expression)
+		
+		var args= get_arguments_array(func_name, _expression)
+
 		var arg_values: Array= []
 
 		for arg in args:
@@ -545,6 +621,25 @@ class CodeLine extends CodeNode:
 
 	func dump_node_tree(indent: int, with_content: bool, suffix: String= ""):
 		super(indent, with_content, ("   " + orig_text ) if with_content else "")
+
+
+
+class FunctionDefinition:
+	enum Type { BUILT_IN, CUSTOM }
+
+	var func_name: String
+	var type: Type
+	var arguments: Array[String]
+	var code: CodeNode
+	var callable: Callable
+	
+	
+	func _init(_func_name: String, _type: Type, _arguments: Array[String]= [], _code: CodeNode= null):
+		func_name= _func_name
+		type= _type
+		arguments= _arguments
+		code= _code
+
 
 
 class CodeExecutionResult extends MyResult:
@@ -581,11 +676,14 @@ var attached_to_node: Node
 
 
 
+func _init():
+	all_functions= {}
+	all_functions.merge(VirtualScriptHelper.built_in_functions)
+
+
 func run():
 	print("RUN")
-	all_functions= {}
 	all_functions.merge(functions)
-	all_functions.merge(VirtualScriptHelper.built_in_functions)
 	
 	code.run()
 
@@ -622,11 +720,11 @@ func add_line(text: String):
 		var closing_line: CodeLine
 		if close_block_queue == 0:
 			closing_line= CodeLine.new(true)
-			closing_line.parse(text)
+			closing_line.parse(text, self)
 		code.root.close_block(closing_line)
 		
 		
-	code.root.add_line(text)
+	code.root.add_line(text, self)
 
 
 func close_block():
@@ -634,8 +732,10 @@ func close_block():
 	close_block_queue+= 1
 	
 
-func register_function(func_name: String, type: Function.Type, arguments: Array[String], func_code: Code):
-	functions[func_name]= Function.new(func_name, type, arguments, func_code)
+func register_function(func_name: String, type: FunctionDefinition.Type, arguments: Array[String], func_code: CodeNode= null)-> FunctionDefinition:
+	var definition:= FunctionDefinition.new(func_name, type, arguments, func_code)
+	functions[func_name]= definition
+	return definition
 
 
 func parse_file(file_path: String):
